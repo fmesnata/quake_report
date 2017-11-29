@@ -33,7 +33,6 @@ public final class QueryUtils {
 
     public static List<Earthquake> fetchEarthquakes(String url) {
         URL usgsUrl = stringToURL(url);
-
         String jsonResponse = makeHttpRequest(usgsUrl);
 
         return extractEarthquakes(jsonResponse);

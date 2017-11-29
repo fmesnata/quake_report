@@ -15,37 +15,56 @@
  */
 package com.example.android.quakereport;
 
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
-import android.widget.ArrayAdapter;
+import android.util.Log;
+import android.view.View;
 import android.widget.ListView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class EarthquakeActivity extends AppCompatActivity {
+public class EarthquakeActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<List<Earthquake>> {
 
-    public static final String LOG_TAG = EarthquakeActivity.class.getName();
     private static final String USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventtype=earthquake&orderby=time&minmag=3&limit=20";
+    private EarthquakeAdapter adapter;
+    private TextView emptyView;
+    private ProgressBar spinner;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.earthquake_activity);
+        setEarthQuakeList(new ArrayList<>());
 
-        EarthquakeAsyncTask task = new EarthquakeAsyncTask();
-        task.execute(USGS_URL);
+        NetworkInfo networkInfo = isInternetAvailable();
+        emptyView = (TextView) findViewById(R.id.empty_view);
+
+        if (networkInfo != null && networkInfo.isConnectedOrConnecting()) {
+            getSupportLoaderManager().initLoader(1, null, this).forceLoad();
+            spinner = (ProgressBar) findViewById(R.id.spinner);
+            spinner.setVisibility(View.VISIBLE);
+        } else {
+            emptyView.setText(R.string.no_internet_connection);
+        }
     }
 
-    private void updateUi(List<Earthquake> earthquakes) {
+    private void setEarthQuakeList(List<Earthquake> earthquakes) {
         // Find a reference to the {@link ListView} in the layout
         ListView earthquakeListView = (ListView) findViewById(R.id.list);
+        earthquakeListView.setEmptyView(emptyView);
 
         // Create a new {@link ArrayAdapter} of earthquakes
-        EarthquakeAdapter adapter = new EarthquakeAdapter(this, earthquakes);
+        adapter = new EarthquakeAdapter(this, earthquakes);
 
         // Set the adapter on the {@link ListView}
         // so the list can be populated in the user interface
@@ -61,21 +80,32 @@ public class EarthquakeActivity extends AppCompatActivity {
         });
     }
 
-    private class EarthquakeAsyncTask extends AsyncTask<String, Void, List<Earthquake>> {
+    @Override
+    public Loader onCreateLoader(int id, Bundle args) {
+        return new EarthquakeLoader(EarthquakeActivity.this, USGS_URL);
+    }
 
-        @Override
-        protected List<Earthquake> doInBackground(String... urls) {
-            if (urls.length == 0 || urls[0] == null) {
-                return new ArrayList<>();
-            }
-            return QueryUtils.fetchEarthquakes(urls[0]);
-        }
-
-        @Override
-        protected void onPostExecute(List<Earthquake> earthquakes) {
-            if (earthquakes != null && !earthquakes.isEmpty()) {
-                updateUi(earthquakes);
-            }
+    @Override
+    public void onLoadFinished(Loader<List<Earthquake>> loader, List<Earthquake> earthquakes) {
+        spinner.setVisibility(View.GONE);
+        if (earthquakes != null && !earthquakes.isEmpty()) {
+            adapter.clear();
+            adapter.addAll(earthquakes);
+        } else {
+            emptyView.setText(R.string.no_earthquake_found);
         }
     }
+
+    @Override
+    public void onLoaderReset(Loader loader) {
+        adapter.clear();
+    }
+
+    private NetworkInfo isInternetAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        Log.d("IsInternetAvailable", connectivityManager.toString());
+        return connectivityManager.getActiveNetworkInfo();
+    }
+
 }
